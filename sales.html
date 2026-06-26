@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales History - Desmond's Spares</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🏍️ Desmond's <span>Spares</span></div>
+    <div class="nav-links">
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="inventory.html">📦 Inventory</a>
+      <a href="sales.html" class="active">💰 Sales</a>
+      <a href="#" onclick="logout()">🚪 Logout</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
+      <div>
+        <h1 class="page-title">💰 Sales History</h1>
+        <p class="page-subtitle">Track all transactions and revenue</p>
+      </div>
+      <button class="btn btn-secondary" onclick="exportSales()">📥 Export CSV</button>
+    </div>
+
+    <div class="grid grid-4" style="margin-bottom:2rem;">
+      <div class="stat-card sales">
+        <div class="stat-value" id="totalRevenue">UGX 0</div>
+        <div class="stat-label">💰 Total Revenue</div>
+      </div>
+      <div class="stat-card products">
+        <div class="stat-value" id="totalTransactions">0</div>
+        <div class="stat-label">🧾 Transactions</div>
+      </div>
+      <div class="stat-card in-stock">
+        <div class="stat-value" id="totalItemsSold">0</div>
+        <div class="stat-label">📦 Items Sold</div>
+      </div>
+      <div class="stat-card out-stock">
+        <div class="stat-value" id="avgSale">UGX 0</div>
+        <div class="stat-label">📊 Average Sale</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">🧾 All Transactions</h3>
+        <input type="text" class="search-bar" id="searchSales" placeholder="Search sales..." onkeyup="filterSales()" style="max-width:250px;">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date & Time</th>
+              <th>Product</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Qty</th>
+              <th>Unit Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="salesTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/shared.js"></script>
+  <script>
+    if (!Auth.checkAuth()) throw new Error('Not authenticated');
+
+    function logout() {
+      Auth.logout();
+      window.location.href = 'login.html';
+    }
+
+    function renderSales() {
+      const search = document.getElementById('searchSales').value.toLowerCase();
+      let sales = Storage.getSales();
+
+      if (search) {
+        sales = sales.filter(s =>
+          s.productName.toLowerCase().includes(search) ||
+          s.type.toLowerCase().includes(search) ||
+          s.category.toLowerCase().includes(search)
+        );
+      }
+
+      // Stats
+      const totalRevenue = sales.reduce((sum, s) => sum + s.total, 0);
+      const totalItems = sales.reduce((sum, s) => sum + s.quantity, 0);
+      const avgSale = sales.length > 0 ? Math.round(totalRevenue / sales.length) : 0;
+
+      document.getElementById('totalRevenue').textContent = Utils.formatMoney(totalRevenue);
+      document.getElementById('totalTransactions').textContent = sales.length;
+      document.getElementById('totalItemsSold').textContent = totalItems;
+      document.getElementById('avgSale').textContent = Utils.formatMoney(avgSale);
+
+      const tbody = document.getElementById('salesTable');
+      if (sales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:2rem; color:var(--text-light);">No sales recorded yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = sales.map((s, i) => {
+        const catInfo = CATEGORIES[s.category] || { icon: '📦' };
+        return `
+          <tr>
+            <td>${sales.length - i}</td>
+            <td style="font-size:0.85rem;">${Utils.formatDate(s.date)}</td>
+            <td><strong>${s.productName}</strong></td>
+            <td>${s.type}</td>
+            <td>${catInfo.icon} ${catInfo.name || s.category}</td>
+            <td style="font-weight:700;">${s.quantity}</td>
+            <td>${Utils.formatMoney(s.price)}</td>
+            <td style="font-weight:700; color:var(--primary);">${Utils.formatMoney(s.total)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterSales() {
+      renderSales();
+    }
+
+    function exportSales() {
+      const sales = Storage.getSales();
+      if (sales.length === 0) {
+        Utils.toast('No sales to export', 'error');
+        return;
+      }
+
+      let csv = 'Date,Product,Type,Category,Quantity,Unit Price,Total\n';
+      sales.forEach(s => {
+        csv += `"${new Date(s.date).toLocaleString()}","${s.productName}","${s.type}","${s.category}",${s.quantity},${s.price},${s.total}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `desmonds_sales_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      Utils.toast('📥 Sales exported to CSV!');
+    }
+
+    renderSales();
+  </script>
+</body>
+</html>

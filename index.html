@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desmond's Spares - Vehicle & Moto Spares</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🏍️ Desmond's <span>Spares</span></div>
+    <div class="nav-links">
+      <a href="index.html" class="active">Store</a>
+      <a href="admin/login.html">🔒 Employee Login</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
+      <div>
+        <h1 class="page-title">🛒 Spares Store</h1>
+        <p class="page-subtitle">Browse and sell vehicle & motorcycle spare parts</p>
+      </div>
+      <input type="text" class="search-bar" id="searchInput" placeholder="Search parts..." onkeyup="filterProducts()">
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="filterCategory('all')">All Parts</div>
+      <div class="tab" onclick="filterCategory('vehicle')">🚗 Vehicle</div>
+      <div class="tab" onclick="filterCategory('moto')">🏍️ Motorcycle</div>
+    </div>
+
+    <div class="category-pills" id="categoryPills"></div>
+
+    <div class="grid grid-4" id="productsGrid"></div>
+
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <div class="empty-state-icon">🔍</div>
+      <h3>No parts found</h3>
+      <p>Try adjusting your search or filters</p>
+    </div>
+  </div>
+
+  <!-- Sale Modal -->
+  <div class="modal-overlay" id="saleModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">🛑 Brakes</h3>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="js/shared.js"></script>
+  <script>
+    let currentCategory = 'all';
+    let currentVehicleType = 'all';
+    let selectedProduct = null;
+    let selectedType = null;
+
+    function renderCategories() {
+      const pills = document.getElementById('categoryPills');
+      const cats = Utils.getCategories();
+      pills.innerHTML = '<div class="pill active" onclick="filterProductCategory('all')">All Categories</div>' +
+        cats.map(c => `<div class="pill" onclick="filterProductCategory('${c.key}')">${c.icon} ${c.name}</div>`).join('');
+    }
+
+    function filterProductCategory(cat) {
+      document.querySelectorAll('.category-pills .pill').forEach(p => p.classList.remove('active'));
+      event.target.classList.add('active');
+      currentCategory = cat;
+      renderProducts();
+    }
+
+    function filterCategory(type) {
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      currentVehicleType = type;
+      renderProducts();
+    }
+
+    function filterProducts() {
+      renderProducts();
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('productsGrid');
+      const empty = document.getElementById('emptyState');
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      let products = Storage.getProducts();
+
+      if (currentCategory !== 'all') {
+        products = products.filter(p => p.category === currentCategory);
+      }
+      if (currentVehicleType !== 'all') {
+        products = products.filter(p => p.vehicleType === currentVehicleType || p.vehicleType === 'both');
+      }
+      if (search) {
+        products = products.filter(p => p.name.toLowerCase().includes(search) || p.type.toLowerCase().includes(search));
+      }
+
+      if (products.length === 0) {
+        grid.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      grid.style.display = 'grid';
+      empty.style.display = 'none';
+
+      grid.innerHTML = products.map(p => {
+        const status = Utils.getStockStatus(p);
+        const catInfo = CATEGORIES[p.category] || { icon: '📦' };
+        return `
+          <div class="product-card" onclick="openSaleModal(${p.id})">
+            <div class="product-img">${p.image || catInfo.icon}</div>
+            <div class="product-info">
+              <div class="product-name">${p.name}</div>
+              <div class="product-meta">${catInfo.icon} ${p.type} • ${p.vehicleType === 'both' ? '🚗🏍️ Both' : p.vehicleType === 'vehicle' ? '🚗 Vehicle' : '🏍️ Moto'}</div>
+              <div class="product-price">${Utils.formatMoney(p.price)}</div>
+              <div class="product-stock ${status.class}">${status.text} (${p.stock} left)</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openSaleModal(productId) {
+      const products = Storage.getProducts();
+      selectedProduct = products.find(p => p.id === productId);
+      if (!selectedProduct) return;
+
+      if (selectedProduct.stock === 0) {
+        Utils.toast('This item is out of stock!', 'error');
+        return;
+      }
+
+      document.getElementById('modalTitle').textContent = `${selectedProduct.image} ${selectedProduct.name}`;
+      const content = document.getElementById('modalContent');
+
+      // Get all products of same name/category to show types
+      const related = products.filter(p => p.name === selectedProduct.name && p.id !== selectedProduct.id);
+      const allOptions = [selectedProduct, ...related].filter(p => p.stock > 0);
+
+      if (allOptions.length === 0) {
+        content.innerHTML = '<p style="color:var(--danger); font-weight:600;">All variants are out of stock!</p>';
+      } else {
+        content.innerHTML = `
+          <p style="margin-bottom:1rem; color:var(--text-light);">Select type and quantity:</p>
+          <div class="type-selector" id="typeSelector">
+            ${allOptions.map((opt, i) => `
+              <div class="type-chip ${i === 0 ? 'selected' : ''}" onclick="selectType(this, ${opt.id})">
+                ${opt.type} - ${Utils.formatMoney(opt.price)}
+                <br><small>${opt.stock} in stock</small>
+              </div>
+            `).join('')}
+          </div>
+          <div class="form-group" style="margin-top:1.5rem;">
+            <label>Quantity</label>
+            <div class="qty-stepper">
+              <button onclick="changeQty(-1)">−</button>
+              <input type="number" id="saleQty" value="1" min="1" max="${allOptions[0].stock}" onchange="validateQty()">
+              <button onclick="changeQty(1)">+</button>
+            </div>
+            <p style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-light);">
+              Total: <strong id="saleTotal" style="color:var(--primary); font-size:1.1rem;">${Utils.formatMoney(allOptions[0].price)}</strong>
+            </p>
+          </div>
+          <button class="btn btn-success" style="width:100%; margin-top:1rem; padding:1rem;" onclick="confirmSale()">
+            ✅ Confirm Sale
+          </button>
+        `;
+        selectedType = allOptions[0];
+      }
+
+      document.getElementById('saleModal').classList.add('active');
+    }
+
+    function selectType(el, productId) {
+      document.querySelectorAll('.type-chip').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      const products = Storage.getProducts();
+      selectedType = products.find(p => p.id === productId);
+      document.getElementById('saleQty').max = selectedType.stock;
+      document.getElementById('saleQty').value = 1;
+      updateTotal();
+    }
+
+    function changeQty(delta) {
+      const input = document.getElementById('saleQty');
+      const newVal = parseInt(input.value) + delta;
+      if (newVal >= 1 && newVal <= parseInt(input.max)) {
+        input.value = newVal;
+        updateTotal();
+      }
+    }
+
+    function validateQty() {
+      const input = document.getElementById('saleQty');
+      let val = parseInt(input.value) || 1;
+      const max = parseInt(input.max);
+      if (val < 1) val = 1;
+      if (val > max) val = max;
+      input.value = val;
+      updateTotal();
+    }
+
+    function updateTotal() {
+      const qty = parseInt(document.getElementById('saleQty').value) || 1;
+      const total = selectedType.price * qty;
+      document.getElementById('saleTotal').textContent = Utils.formatMoney(total);
+    }
+
+    function confirmSale() {
+      const qty = parseInt(document.getElementById('saleQty').value) || 1;
+      if (!selectedType) return;
+
+      if (qty > selectedType.stock) {
+        Utils.toast('Not enough stock available!', 'error');
+        return;
+      }
+
+      const product = Storage.updateProductStock(selectedType.id, qty);
+      if (product) {
+        Storage.addSale({
+          productId: selectedType.id,
+          productName: selectedType.name,
+          type: selectedType.type,
+          quantity: qty,
+          price: selectedType.price,
+          total: selectedType.price * qty,
+          category: selectedType.category,
+          vehicleType: selectedType.vehicleType
+        });
+        Utils.toast(`✅ Sold ${qty}x ${selectedType.name} (${selectedType.type})`);
+        closeModal();
+        renderProducts();
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('saleModal').classList.remove('active');
+      selectedProduct = null;
+      selectedType = null;
+    }
+
+    // Close modal on overlay click
+    document.getElementById('saleModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    renderCategories();
+    renderProducts();
+  </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Desmond's Spares</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="login-logo">
+        <h1>🏍️ Desmond's Spares</h1>
+        <p style="color:var(--text-light); margin-top:0.5rem;">Employee & Admin Portal</p>
+      </div>
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="username" placeholder="Enter username" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%; padding:0.9rem; font-size:1rem;">
+          🔐 Sign In
+        </button>
+      </form>
+      <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid var(--border); text-align:center;">
+        <p style="font-size:0.85rem; color:var(--text-light);">
+          <strong>Demo Accounts:</strong><br>
+          Admin: <code>admin</code> / <code>desmond123</code><br>
+          Employee: <code>employee</code> / <code>spares456</code>
+        </p>
+      </div>
+      <div style="text-align:center; margin-top:1rem;">
+        <a href="../index.html" style="color:var(--primary); text-decoration:none; font-size:0.9rem;">← Back to Store</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/shared.js"></script>
+  <script>
+    function handleLogin(e) {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const user = Auth.login(username, password);
+      if (user) {
+        Utils.toast('✅ Login successful!');
+        setTimeout(() => window.location.href = 'dashboard.html', 500);
+      } else {
+        Utils.toast('❌ Invalid credentials', 'error');
+      }
+    }
+  </script>
+</body>
+</html>
